@@ -49,7 +49,7 @@ All software dependencies are described in [`requirements.txt`](requirements.txt
 **1. Clone the repository**
 
 ```bash
-git clone https://github.com/sWAyaK/An-app-for-automatically-recognizing-AI-generated-news-and-human-written-news/
+git clone https://github.com/sWAyaK/Ai-News-Detector/
 cd An-app-for-automatically-recognizing-AI-generated-news-and-human-written-news
 ```
 
