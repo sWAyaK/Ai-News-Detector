@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NewsDetector — Детектор AI-текстов</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>
+    :root {
+      --ai-color:    #dc2626;
+      --human-color: #16a34a;
+      --card-r:      12px;
+    }
+    body { background: #f1f5f9; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+    /* ── Navbar ── */
+    .app-nav { background: #1e3a8a; padding: 0.75rem 0; }
+    .app-nav .brand { font-weight: 800; font-size: 1.2rem; color: #fff; letter-spacing: -0.5px; }
+    .app-nav .brand span { color: #93c5fd; }
+    .app-nav .sub  { color: #93c5fd; font-size: 0.8rem; }
+
+    /* ── Tabs ── */
+    .tab-row { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 0 1rem; }
+    .tab-row .nav-link {
+      border: none; border-bottom: 3px solid transparent;
+      border-radius: 0; padding: 0.75rem 1.25rem;
+      font-weight: 500; color: #64748b;
+      transition: color .15s, border-color .15s;
+    }
+    .tab-row .nav-link.active { color: #1e40af; border-bottom-color: #1e40af; }
+    .tab-row .nav-link:hover:not(.active) { color: #334155; }
+
+    /* ── Cards ── */
+    .card { border: none; border-radius: var(--card-r); box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04); }
+
+    /* ── News list ── */
+    .news-item { border-bottom: 1px solid #f1f5f9; padding: .75rem 1rem; transition: background .1s; }
+    .news-item:last-child { border-bottom: none; }
+    .news-item:hover { background: #f8fafc; }
+    .src-badge { font-size: .68rem; background: #e2e8f0; color: #475569; border-radius: 4px; padding: 1px 7px; }
+    .check-btn { font-size: .75rem; padding: 3px 10px; white-space: nowrap; }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 2px dashed #cbd5e1; border-radius: var(--card-r);
+      padding: 2rem; text-align: center; cursor: pointer;
+      transition: all .2s; background: #fff;
+    }
+    .drop-zone:hover, .drop-zone.over { border-color: #2563eb; background: #eff6ff; }
+
+    /* ── Result card ── */
+    .verdict-badge {
+      display: inline-block; font-size: 1.6rem; font-weight: 800;
+      padding: .4rem 1.8rem; border-radius: 50px;
+    }
+    .v-ai    { background: #fee2e2; color: var(--ai-color); }
+    .v-human { background: #dcfce7; color: var(--human-color); }
+
+    .metric-box { background: #f8fafc; border-radius: 8px; padding: .6rem .8rem; text-align: center; }
+    .metric-val { font-size: 1.25rem; font-weight: 700; color: #1e293b; }
+    .metric-lbl { font-size: .68rem; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+
+    .marker-tag {
+      display: inline-block; background: #fef9c3; color: #854d0e;
+      border: 1px solid #fde68a; border-radius: 4px;
+      padding: 2px 8px; font-size: .78rem; margin: 2px;
+    }
+
+    pre.preview {
+      white-space: pre-wrap; word-break: break-word; font-size: .78rem;
+      max-height: 160px; overflow-y: auto;
+      background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: 8px; padding: .75rem; color: #334155;
+    }
+
+    .spinner-row { display: none; align-items: center; gap: .5rem; color: #64748b; }
+    .spinner-row.on { display: flex; }
+
+    #loadingCard { display: none; }
+    #loadingCard.on { display: block; }
+    #resultCard { display: none; }
+    #resultCard.on { display: block; }
+
+    #newsEmpty, #newsErr { display: none; }
+    #newsEmpty.on, #newsErr.on { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────────────────── -->
+<nav class="app-nav">
+  <div class="container d-flex align-items-center justify-content-between">
+    <div class="brand"><i class="bi bi-shield-check me-2"></i>News<span>Detector</span></div>
+    <div class="sub"><i class="bi bi-cpu me-1"></i>Детектор AI-текстов</div>
+  </div>
+</nav>
+
+<!-- ── Tabs ───────────────────────────────────────────────────────────── -->
+<div class="tab-row">
+  <div class="container">
+    <ul class="nav" id="tabs">
+      <li class="nav-item">
+        <a class="nav-link active" href="#" data-tab="news">
+          <i class="bi bi-newspaper me-1"></i>Поиск новостей
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#" data-tab="url">
+          <i class="bi bi-link-45deg me-1"></i>По URL
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="#" data-tab="text">
+          <i class="bi bi-textarea-t me-1"></i>Свой текст
+        </a>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<!-- ── Main layout ────────────────────────────────────────────────────── -->
+<div class="container py-4">
+  <div class="row g-4">
+
+    <!-- Left: input panels -->
+    <div class="col-lg-7">
+
+      <!-- ═══ TAB: news ═══ -->
+      <div id="pane-news">
+        <div class="card mb-3">
+          <div class="card-body">
+            <div class="input-group">
+              <input id="searchQ" type="text" class="form-control"
+                     placeholder="Ключевое слово (или оставьте пустым для всех)">
+              <button class="btn btn-primary" onclick="doSearch()">
+                <i class="bi bi-search"></i> Найти
+              </button>
+            </div>
+            <!-- Source checkboxes (built by JS) -->
+            <div id="srcFilters" class="mt-3 d-flex flex-wrap gap-3"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body p-0">
+            <div id="newsSpinner" class="spinner-row on p-4 justify-content-center">
+              <div class="spinner-border spinner-border-sm text-primary"></div>
+              <span>Загрузка новостей…</span>
+            </div>
+            <div id="newsErr" class="alert alert-danger m-3"></div>
+            <div id="newsList"></div>
+            <div id="newsEmpty" class="text-center text-muted py-5">
+              <i class="bi bi-search display-5 d-block mb-2 opacity-25"></i>
+              Ничего не найдено
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ TAB: url ═══ -->
+      <div id="pane-url" class="d-none">
+        <div class="card">
+          <div class="card-body">
+            <label class="form-label fw-semibold mb-2">URL статьи</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-link"></i></span>
+              <input id="urlInput" type="url" class="form-control"
+                     placeholder="https://lenta.ru/news/…">
+              <button class="btn btn-primary" id="urlBtn" onclick="doUrl()">Проверить</button>
+            </div>
+
+            <div id="urlSpinner" class="spinner-row mt-3">
+              <div class="spinner-border spinner-border-sm text-primary"></div>
+              <span id="urlSpinnerTxt">Загружаю страницу…</span>
+            </div>
+            <div id="urlErr" class="alert alert-danger mt-3 d-none"></div>
+
+            <div id="urlPreview" class="mt-3 d-none">
+              <div class="fw-semibold small mb-1" id="urlTitle"></div>
+              <pre class="preview" id="urlText"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ TAB: text ═══ -->
+      <div id="pane-text" class="d-none">
+
+        <!-- File upload -->
+        <div class="card mb-3">
+          <div class="card-body">
+            <label class="form-label fw-semibold">Загрузить файл (.txt)</label>
+            <div class="drop-zone" id="dropZone"
+                 onclick="document.getElementById('fileInput').click()">
+              <i class="bi bi-cloud-upload display-4 text-primary mb-2 d-block"></i>
+              <div class="fw-semibold">Нажмите или перетащите файл</div>
+              <div class="text-muted small mt-1">Поддерживаются .txt • до 2 МБ</div>
+              <div id="fileName" class="mt-2 small text-primary fw-semibold"></div>
+            </div>
+            <input type="file" id="fileInput" accept=".txt,.text,.md" class="d-none">
+            <div id="fileErr" class="alert alert-danger mt-2 d-none"></div>
+            <button id="fileBtn" class="btn btn-primary w-100 mt-2" onclick="doFile()" disabled>
+              <i class="bi bi-play-circle me-1"></i>Проверить файл
+            </button>
+          </div>
+        </div>
+
+        <!-- Manual text -->
+        <div class="card">
+          <div class="card-body">
+            <label class="form-label fw-semibold">Или введите текст вручную</label>
+            <textarea id="manualText" class="form-control" rows="10"
+                      placeholder="Вставьте или введите текст для проверки…"></textarea>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <span class="text-muted small" id="charCnt">0 символов</span>
+              <button class="btn btn-primary" onclick="doManual()">
+                <i class="bi bi-play-circle me-1"></i>Проверить
+              </button>
+            </div>
+            <div id="textErr" class="alert alert-danger mt-2 d-none"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /col left -->
+
+    <!-- Right: results -->
+    <div class="col-lg-5">
+
+      <!-- Loading -->
+      <div class="card" id="loadingCard">
+        <div class="card-body text-center py-5">
+          <div class="spinner-border text-primary mb-3" role="status"></div>
+          <div class="fw-semibold" id="loadingMsg">Анализирую текст…</div>
+          <div class="text-muted small mt-1">Пожалуйста, подождите</div>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="card" id="resultCard">
+        <div class="card-body">
+
+          <!-- Verdict -->
+          <div class="text-center mb-4">
+            <div class="text-muted small text-uppercase fw-semibold mb-2" style="letter-spacing:.6px;">
+              Результат анализа
+            </div>
+            <div class="verdict-badge" id="verdict"></div>
+            <div class="text-muted small mt-2 text-truncate px-2" id="resTitle"></div>
+          </div>
+
+          <!-- Probability bars -->
+          <div class="mb-4">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="small fw-semibold text-success">Человек</span>
+              <span class="small fw-semibold" id="pHumanVal"></span>
+            </div>
+            <div class="progress mb-3" style="height:10px;border-radius:5px;">
+              <div id="pHumanBar" class="progress-bar bg-success" style="border-radius:5px;"></div>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span class="small fw-semibold text-danger">AI</span>
+              <span class="small fw-semibold" id="pAiVal"></span>
+            </div>
+            <div class="progress" style="height:10px;border-radius:5px;">
+              <div id="pAiBar" class="progress-bar bg-danger" style="border-radius:5px;"></div>
+            </div>
+          </div>
+
+          <!-- Stats grid -->
+          <div class="row g-2 mb-3" id="statsGrid"></div>
+
+          <!-- AI markers -->
+          <div id="markersWrap" class="d-none mb-3">
+            <div class="small fw-semibold text-warning-emphasis mb-1">
+              <i class="bi bi-exclamation-triangle me-1"></i>AI-маркеры:
+            </div>
+            <div id="markersList"></div>
+          </div>
+
+          <!-- Text preview -->
+          <div id="previewWrap" class="d-none">
+            <div class="small fw-semibold text-muted mb-1">
+              <i class="bi bi-file-text me-1"></i>Текст:
+            </div>
+            <pre class="preview" id="resPreview"></pre>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Error when article fetch fails -->
+      <div class="card border-danger-subtle" id="analysisErrCard" style="display:none;">
+        <div class="card-body text-center py-4">
+          <i class="bi bi-exclamation-triangle-fill text-danger fs-1 d-block mb-3"></i>
+          <div class="fw-semibold mb-2">Не удалось загрузить статью</div>
+          <div id="analysisErrMsg" class="text-muted small"></div>
+        </div>
+      </div>
+
+      <!-- Placeholder when nothing analyzed yet -->
+      <div class="card" id="placeholderCard">
+        <div class="card-body text-center py-5 text-muted">
+          <i class="bi bi-arrow-left-circle display-4 d-block mb-3 opacity-25"></i>
+          <div class="fw-semibold">Выберите новость, введите текст<br>или загрузите файл</div>
+        </div>
+      </div>
+
+    </div><!-- /col right -->
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const SOURCES = [
+  {id:'lenta',       name:'Lenta.ru'},
+  {id:'ria',         name:'РИА'},
+  {id:'tass',        name:'ТАСС'},
+  {id:'rbc',         name:'RBC'},
+  {id:'gazeta_pol',  name:'Газета (пол.)'},
+  {id:'gazeta_soc',  name:'Газета (общ.)'},
+  {id:'interfax',    name:'Интерфакс'},
+  {id:'kommersant',  name:'Ъ'},
+];
+
+// ── State ────────────────────────────────────────────────────────────────────
+let selectedSrc = new Set(SOURCES.map(s => s.id));
+let articles    = [];   // current news list
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  buildSrcFilters();
+  doSearch();
+
+  // Tab clicks
+  document.querySelectorAll('#tabs .nav-link').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      switchTab(link.dataset.tab);
+    });
+  });
+
+  // File input
+  const fi = document.getElementById('fileInput');
+  fi.addEventListener('change', () => {
+    if (fi.files[0]) {
+      document.getElementById('fileName').textContent = fi.files[0].name;
+      document.getElementById('fileBtn').disabled = false;
+    }
+  });
+
+  // Drag & drop
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('over');
+    if (e.dataTransfer.files[0]) {
+      fi.files = e.dataTransfer.files;
+      document.getElementById('fileName').textContent = e.dataTransfer.files[0].name;
+      document.getElementById('fileBtn').disabled = false;
+    }
+  });
+
+  // Char counter
+  document.getElementById('manualText').addEventListener('input', () => {
+    document.getElementById('charCnt').textContent =
+      document.getElementById('manualText').value.length + ' символов';
+  });
+
+  // Enter keys
+  document.getElementById('searchQ').addEventListener('keydown', e => { if (e.key==='Enter') doSearch(); });
+  document.getElementById('urlInput').addEventListener('keydown', e => { if (e.key==='Enter') doUrl(); });
+});
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['news','url','text'].forEach(t => {
+    document.getElementById('pane-'+t).classList.toggle('d-none', t !== tab);
+  });
+  document.querySelectorAll('#tabs .nav-link').forEach(l => {
+    l.classList.toggle('active', l.dataset.tab === tab);
+  });
+}
+
+// ── Source filters ────────────────────────────────────────────────────────────
+function buildSrcFilters() {
+  document.getElementById('srcFilters').innerHTML = SOURCES.map(s => `
+    <label class="d-flex align-items-center gap-1 small user-select-none" style="cursor:pointer;">
+      <input type="checkbox" class="form-check-input m-0" value="${s.id}" checked
+             onchange="selectedSrc[this.checked?'add':'delete'](this.value)">
+      ${s.name}
+    </label>
+  `).join('');
+}
+
+// ── News search ───────────────────────────────────────────────────────────────
+async function doSearch() {
+  const q      = document.getElementById('searchQ').value.trim();
+  const spin   = document.getElementById('newsSpinner');
+  const list   = document.getElementById('newsList');
+  const empty  = document.getElementById('newsEmpty');
+  const err    = document.getElementById('newsErr');
+
+  list.innerHTML = '';
+  empty.classList.remove('on');
+  err.classList.remove('on');
+  spin.classList.add('on');
+
+  const p = new URLSearchParams({q});
+  [...selectedSrc].forEach(s => p.append('src', s));
+
+  try {
+    const res  = await fetch('/api/news?' + p);
+    articles   = await res.json();
+    spin.classList.remove('on');
+
+    if (!articles.length) { empty.classList.add('on'); return; }
+
+    list.innerHTML = articles.map((a, i) => `
+      <div class="news-item">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="small fw-semibold mb-1 lh-sm">${esc(a.title)}</div>
+            <div class="text-muted lh-sm" style="font-size:.76rem;">
+              ${a.summary ? esc(a.summary) : '<span class="fst-italic opacity-50">Нет описания</span>'}
+            </div>
+            <div class="mt-1 d-flex align-items-center gap-2">
+              <span class="src-badge">${esc(a.source)}</span>
+              <span class="text-muted" style="font-size:.68rem;">${esc((a.published||'').slice(0,16))}</span>
+            </div>
+          </div>
+          <div class="d-flex flex-column gap-1 flex-shrink-0">
+            <button class="btn btn-outline-success check-btn" data-idx="${i}" title="Проверить">
+              <i class="bi bi-play-fill"></i>
+            </button>
+            <a href="${safeUrl(a.link)}" target="_blank" rel="noopener noreferrer"
+               class="btn btn-outline-secondary check-btn" title="Открыть">
+              <i class="bi bi-box-arrow-up-right"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Event delegation for analyze buttons
+    list.querySelectorAll('[data-idx]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const a = articles[+btn.dataset.idx];
+        // Используем full_text только если он содержит кириллицу (не бинарные данные)
+        const ft = (a.text && /[а-яёА-ЯЁ]/.test(a.text)) ? a.text : '';
+        analyzeUrl(a.link, a.title, ft);
+      });
+    });
+
+  } catch(e) {
+    spin.classList.remove('on');
+    err.classList.add('on');
+    err.textContent = 'Ошибка загрузки: ' + e.message;
+  }
+}
+
+// ── URL tab ───────────────────────────────────────────────────────────────────
+async function doUrl() {
+  const url   = document.getElementById('urlInput').value.trim();
+  const spin  = document.getElementById('urlSpinner');
+  const txt   = document.getElementById('urlSpinnerTxt');
+  const err   = document.getElementById('urlErr');
+  const prev  = document.getElementById('urlPreview');
+  const btn   = document.getElementById('urlBtn');
+
+  if (!url) return;
+  err.classList.add('d-none');
+  prev.classList.add('d-none');
+  spin.classList.add('on');
+  btn.disabled = true;
+
+  try {
+    txt.textContent = 'Загружаю страницу…';
+    const fd = await fetchUrl(url);
+    document.getElementById('urlTitle').textContent = fd.title;
+    document.getElementById('urlText').textContent  = fd.text.slice(0, 1500) + (fd.text.length > 1500 ? '…' : '');
+    prev.classList.remove('d-none');
+    spin.classList.remove('on');
+    btn.disabled = false;
+
+    txt.textContent = 'Анализирую…';
+    spin.classList.add('on');
+    showLoading('Анализирую текст…');
+    const res = await analyze(fd.text);
+    showResult(res, fd.title);
+
+  } catch(e) {
+    spin.classList.remove('on');
+    btn.disabled = false;
+    err.classList.remove('d-none');
+    err.textContent = e.message;
+    hideLoading();
+  }
+}
+
+async function analyzeUrl(url, title, fullText = '') {
+  showLoading('Загружаю статью…');
+  try {
+    let text, resolvedTitle = title;
+    if (fullText) {
+      text = fullText;
+      setLoadingMsg('Анализирую текст…');
+    } else {
+      const fd = await fetchUrl(url);
+      text = fd.text;
+      resolvedTitle = title || fd.title;
+      setLoadingMsg('Анализирую текст…');
+    }
+    const res = await analyze(text);
+    showResult(res, resolvedTitle, text.slice(0, 500));
+  } catch(e) {
+    showAnalysisError(e.message, url);
+  }
+}
+
+// ── File ──────────────────────────────────────────────────────────────────────
+async function doFile() {
+  const fi  = document.getElementById('fileInput');
+  const err = document.getElementById('fileErr');
+  if (!fi.files[0]) return;
+
+  err.classList.add('d-none');
+  showLoading('Читаю файл и анализирую…');
+
+  const form = new FormData();
+  form.append('file', fi.files[0]);
+
+  try {
+    const resp = await fetch('/api/analyze_file', {method:'POST', body: form});
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    showResult(data, fi.files[0].name, data.text_preview);
+  } catch(e) {
+    hideLoading();
+    err.classList.remove('d-none');
+    err.textContent = e.message;
+  }
+}
+
+// ── Manual text ───────────────────────────────────────────────────────────────
+async function doManual() {
+  const text = document.getElementById('manualText').value.trim();
+  const err  = document.getElementById('textErr');
+  if (!text) return;
+
+  err.classList.add('d-none');
+  showLoading('Анализирую текст…');
+
+  try {
+    const res = await analyze(text);
+    showResult(res, 'Введённый текст');
+  } catch(e) {
+    hideLoading();
+    err.classList.remove('d-none');
+    err.textContent = e.message;
+  }
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function fetchUrl(url) {
+  const r = await fetch('/api/fetch_url', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({url}),
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
+async function analyze(text) {
+  const r = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({text}),
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
+// ── Result rendering ──────────────────────────────────────────────────────────
+function showResult(data, title = '', preview = '') {
+  hideLoading();
+
+  const rc = document.getElementById('resultCard');
+  const pc = document.getElementById('placeholderCard');
+  rc.classList.add('on');
+  pc.style.display = 'none';
+
+  // Verdict
+  const vb = document.getElementById('verdict');
+  vb.textContent = data.label;
+  vb.className = 'verdict-badge ' + (data.label === 'AI' ? 'v-ai' : 'v-human');
+
+  document.getElementById('resTitle').textContent = title ? `«${title.slice(0, 70)}»` : '';
+
+  // Bars
+  const pct = v => (v * 100).toFixed(1) + '%';
+  document.getElementById('pHumanVal').textContent = pct(data.p_human);
+  document.getElementById('pAiVal').textContent    = pct(data.p_ai);
+  document.getElementById('pHumanBar').style.width = pct(data.p_human);
+  document.getElementById('pAiBar').style.width    = pct(data.p_ai);
+
+  // Stats
+  const s = data.stats;
+  const METRICS = [
+    ['Слов',        s.word_count],
+    ['Предложений', s.sent_count],
+    ['TTR',         s.ttr],
+    ['AI-маркеры',  s.ai_marker_count],
+    ['Плотн. AI',   s.ai_marker_density],
+    ['Абстракции',  s.abstract_ratio],
+  ];
+  document.getElementById('statsGrid').innerHTML = METRICS.map(([lbl, val]) => `
+    <div class="col-4">
+      <div class="metric-box">
+        <div class="metric-val">${val}</div>
+        <div class="metric-lbl">${lbl}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Markers
+  const mw = document.getElementById('markersWrap');
+  if (data.markers && data.markers.length) {
+    mw.classList.remove('d-none');
+    document.getElementById('markersList').innerHTML =
+      data.markers.map(m => `<span class="marker-tag">${esc(m)}</span>`).join('');
+  } else {
+    mw.classList.add('d-none');
+  }
+
+  // Preview
+  const pw = document.getElementById('previewWrap');
+  if (preview) {
+    pw.classList.remove('d-none');
+    document.getElementById('resPreview').textContent = preview;
+  } else {
+    pw.classList.add('d-none');
+  }
+
+  if (window.innerWidth < 992) {
+    rc.scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
+}
+
+function showAnalysisError(msg, articleUrl = '') {
+  document.getElementById('loadingCard').classList.remove('on');
+  document.getElementById('resultCard').classList.remove('on');
+  document.getElementById('placeholderCard').style.display = 'none';
+  const linkHtml = articleUrl
+    ? `<br><a href="${safeUrl(articleUrl)}" target="_blank" rel="noopener"
+         class="btn btn-sm btn-outline-secondary mt-3">
+         <i class="bi bi-box-arrow-up-right me-1"></i>Открыть статью в браузере
+       </a>`
+    : '';
+  document.getElementById('analysisErrMsg').innerHTML = esc(msg) + linkHtml;
+  document.getElementById('analysisErrCard').style.display = '';
+  if (window.innerWidth < 992) {
+    document.getElementById('analysisErrCard').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+}
+
+function showLoading(msg = 'Анализирую…') {
+  document.getElementById('resultCard').classList.remove('on');
+  document.getElementById('analysisErrCard').style.display = 'none';
+  document.getElementById('placeholderCard').style.display = 'none';
+  document.getElementById('loadingMsg').textContent = msg;
+  document.getElementById('loadingCard').classList.add('on');
+}
+
+function setLoadingMsg(msg) {
+  document.getElementById('loadingMsg').textContent = msg;
+}
+
+function hideLoading() {
+  document.getElementById('loadingCard').classList.remove('on');
+  if (!document.getElementById('resultCard').classList.contains('on')) {
+    document.getElementById('placeholderCard').style.display = '';
+  }
+}
+
+// ── Util ──────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function safeUrl(u) {
+  return (u.startsWith('http://') || u.startsWith('https://')) ? u : '#';
+}
+</script>
+</body>
+</html>
